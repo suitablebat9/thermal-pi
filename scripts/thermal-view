@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Mac launcher: open the Pi's JPEG feed in an ffplay window through SSH."""
 import argparse
+import json
 import pathlib
 import shutil
 import socket
@@ -10,12 +11,45 @@ import tempfile
 import time
 
 
+def connection(parser, reset):
+    path = pathlib.Path.home() / '.config/thermal-pi/mac-connection.json'
+    try:
+        if path.exists() and not reset:
+            profile = json.loads(path.read_text())
+            return profile['host'], profile['port'], profile['demo']
+        host = input('Pi SSH address (username@hostname or SSH alias): ').strip()
+        if not host or host.startswith('-') or any(c.isspace() for c in host):
+            parser.error('Enter the address only, for example pi@localhost.')
+        port_text = input('SSH port (Enter for your SSH default): ').strip()
+        port = int(port_text) if port_text else None
+        if port is not None and not 1 <= port <= 65535:
+            parser.error('Port must be between 1 and 65535.')
+        mode = input('Camera mode: 1 emulator/demo, 2 real P1 [1]: ').strip()
+        if mode not in ('', '1', '2'):
+            parser.error('Choose 1 or 2.')
+        demo = mode != '2'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as stream:
+            json.dump(dict(host=host, port=port, demo=demo), stream)
+        pathlib.Path(stream.name).replace(path)
+        return host, port, demo
+    except (OSError, ValueError, KeyError, TypeError, EOFError) as exc:
+        parser.exit(1, f'Connection setup failed: {exc}. Run thermal-pi --setup.\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('host', help='SSH alias or username@hostname')
+    parser.add_argument('--setup', action='store_true', help='change saved Mac connection')
+    parser.add_argument('host', nargs='?', help='SSH alias or username@hostname')
     parser.add_argument('-p', '--ssh-port', type=int, help='custom SSH port, including emulator forwarding')
     parser.add_argument('--demo', action='store_true', help='use simulated frames')
     args = parser.parse_args()
+    menu_first = args.host is None or pathlib.Path(sys.argv[0]).name == 'thermal-pi'
+    if args.host is None:
+        host, port, demo = connection(parser, args.setup)
+        args.host = host
+        args.ssh_port = args.ssh_port or port
+        args.demo = args.demo or demo
     if args.host.startswith('-'):
         parser.error('invalid SSH destination')
     ffplay = shutil.which('ffplay')
@@ -44,11 +78,22 @@ def main():
                 parser.exit(1, 'SSH camera startup failed. Check the SSH address and update ~/thermal-pi on the Pi.\n')
             url = f'http://127.0.0.1:{local_port}/stream.mjpg'
             with tempfile.TemporaryFile() as errors:
-                player = subprocess.Popen([ffplay, '-hide_banner', '-loglevel', 'error',
-                    '-f', 'mpjpeg', '-probesize', '32', '-analyzeduration', '0',
-                    '-framedrop', '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else ''),
-                    url], stdin=subprocess.DEVNULL, stderr=errors)
+                def open_viewer():
+                    nonlocal player
+                    if player and player.poll() is None:
+                        print('Video window is already open.')
+                        return
+                    player = subprocess.Popen([ffplay, '-hide_banner', '-loglevel', 'error',
+                        '-f', 'mpjpeg', '-probesize', '32', '-analyzeduration', '0',
+                        '-framedrop', '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else ''),
+                        url], stdin=subprocess.DEVNULL, stderr=errors)
                 root = pathlib.Path(__file__).resolve().parents[1]
+                if menu_first:
+                    sys.path.insert(0, str(root))
+                    from thermal_pi.menu import run_menu
+                    run_menu(local_port, open_viewer)
+                    return
+                open_viewer()
                 menu = subprocess.Popen([sys.executable, '-m', 'thermal_pi.menu', '--port', str(local_port)], cwd=root)
                 while ssh.poll() is None and menu.poll() is None and player.poll() is None:
                     time.sleep(.2)
