@@ -9,6 +9,35 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
+from urllib.request import urlopen
+from urllib.error import URLError
+
+
+def feed_demo(player, port):
+    """Pace requests on the Mac so an emulated Pi never queues a video backlog."""
+    url = f'http://127.0.0.1:{port}/api/frame'
+    warned = False
+    try:
+        while player.poll() is None:
+            try:
+                with urlopen(url, timeout=3) as response:
+                    frame = response.read()
+                player.stdin.write(frame)
+                player.stdin.flush()
+                warned = False
+            except (URLError, TimeoutError) as exc:
+                if not warned:
+                    print(f'\nDemo frame delayed ({exc}); retrying.', flush=True)
+                    warned = True
+            time.sleep(.25)
+    except (BrokenPipeError, OSError, ValueError):
+        pass
+    finally:
+        try:
+            player.stdin.close()
+        except OSError:
+            pass
 
 
 def connection(parser, reset):
@@ -86,15 +115,27 @@ def main():
                     if player and player.poll() is None:
                         print('Video window is already open.')
                         return
-                    player = subprocess.Popen([ffplay, '-hide_banner', '-loglevel', 'error',
-                        '-f', 'mpjpeg', '-probesize', '32', '-analyzeduration', '0',
-                        '-framedrop', '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else ''),
-                        url], stdin=subprocess.DEVNULL, stderr=errors)
+                    options = [ffplay, '-hide_banner', '-loglevel', 'error',
+                               '-probesize', '32', '-analyzeduration', '0', '-framedrop',
+                               '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else '')]
+                    if args.demo:
+                        player = subprocess.Popen(options + ['-f', 'mjpeg', '-framerate', '4',
+                                                  '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
+                        threading.Thread(target=feed_demo, args=(player, local_port), daemon=True).start()
+                    else:
+                        player = subprocess.Popen(options + ['-f', 'mpjpeg', url],
+                                                  stdin=subprocess.DEVNULL, stderr=errors)
+                    print('Opening video window…', flush=True)
                 root = pathlib.Path(__file__).resolve().parents[1]
                 if menu_first:
                     sys.path.insert(0, str(root))
                     from thermal_pi.menu import run_menu
-                    run_menu(local_port, open_viewer)
+                    def pause_viewer():
+                        if player and player.poll() is None:
+                            player.terminate()
+                            player.wait(timeout=3)
+                            print('Video paused to let the controls reconnect. Use v to reopen.')
+                    run_menu(local_port, open_viewer, pause_viewer)
                     return
                 open_viewer()
                 menu = subprocess.Popen([sys.executable, '-m', 'thermal_pi.menu', '--port', str(local_port)], cwd=root)

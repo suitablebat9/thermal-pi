@@ -12,7 +12,7 @@ def main():
     run_menu(args.port)
 
 
-def run_menu(port, open_viewer=None):
+def run_menu(port, open_viewer=None, pause_viewer=None):
     base = f'http://127.0.0.1:{port}'
     def api(path, payload=None):
         data = None if payload is None else json.dumps(payload).encode()
@@ -51,9 +51,11 @@ def run_menu(port, open_viewer=None):
         except HTTPError as exc:
             print('Request failed:', exc.read().decode())
         except (URLError, OSError) as exc:
+            if pause_viewer:
+                pause_viewer()
             print('Cannot reach camera service:', exc)
             try:
-                input('Start the service, then press Enter to retry (Ctrl-C exits).')
+                input('Press Enter to check the connection again (Ctrl-C exits).')
             except (EOFError, KeyboardInterrupt):
                 return
         except ValueError as exc:
