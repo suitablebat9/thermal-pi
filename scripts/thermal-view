@@ -60,7 +60,10 @@ def main():
         local_port = listener.getsockname()[1]
     remote_port = 8082 if args.demo else 8080
     tunnel = f'127.0.0.1:{local_port}:127.0.0.1:{remote_port}'
-    command = ['ssh', '-T', '-o', 'ExitOnForwardFailure=yes', '-L', tunnel]
+    destination = args.host + (f' on port {args.ssh_port}' if args.ssh_port else '')
+    print(f'Connecting to {destination} and starting the camera service…', flush=True)
+    command = ['ssh', '-T', '-o', 'ConnectTimeout=10', '-o', 'ConnectionAttempts=1',
+               '-o', 'ExitOnForwardFailure=yes', '-L', tunnel]
     if args.ssh_port:
         command.extend(['-p', str(args.ssh_port)])
     remote = 'cd ~/thermal-pi && exec .venv/bin/python -m thermal_pi.window_session'
@@ -75,7 +78,7 @@ def main():
                 if line.strip() == b'THERMAL_READY':
                     break
             else:
-                parser.exit(1, 'SSH camera startup failed. Check the SSH address and update ~/thermal-pi on the Pi.\n')
+                parser.exit(1, 'Camera session could not start. Check the SSH message above. Run thermal-pi --setup to change the address or username. If the remote module is missing, run cd ~/thermal-pi && git pull --ff-only on the Pi.\n')
             url = f'http://127.0.0.1:{local_port}/stream.mjpg'
             with tempfile.TemporaryFile() as errors:
                 def open_viewer():
