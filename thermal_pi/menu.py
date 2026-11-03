@@ -9,7 +9,7 @@ PAGES = {
     'Main': ['1 White hot     2 Black hot', '3 Iron          4 Rainbow',
              '5 Zoom          6 Rotation', '7 Flip          8 Calibrate shutter',
              '9 Gain          t Temperatures'],
-    'Temperatures': ['i Toggle green range    m Toggle hot/cold spots',
+    'Temperatures': ['i Toggle green range    m Toggle hot/cold spots', 'g Toggle temperature scale',
                      '1 Select lower bound    2 Select upper bound',
                      '+ / - Adjust by 1 degree    [ / ] Adjust by 10',
                      'u Switch Celsius / Fahrenheit'],
@@ -63,6 +63,11 @@ def run_menu(port, open_viewer=None, pause_viewer=None, events=None):
                 elif page == 'Temperatures' and settings:
                     if key in ('1', '2'):
                         bound = 'low_c' if key == '1' else 'high_c'
+                    elif key == 'g':
+                        if 'scale' in settings:
+                            patch['scale'] = not settings['scale']
+                        else:
+                            message = 'Update and restart the Pi service to enable the scale.'
                     elif key in ('i', 'm'):
                         toggle = 'range_on' if key == 'i' else 'spots'
                         patch[toggle] = not settings[toggle]
@@ -124,7 +129,7 @@ def run_menu(port, open_viewer=None, pause_viewer=None, events=None):
                     low, high = low * 1.8 + 32, high * 1.8 + 32
                 lines += [f"Range {'ON' if settings['range_on'] else 'OFF'}: {low:.1f}–{high:.1f} {unit}"
                           + f"    Editing {'lower' if bound == 'low_c' else 'upper'}",
-                          f"Hot/cold spots {'ON' if settings['spots'] else 'OFF'}"]
+                          f"Hot/cold spots {'ON' if settings['spots'] else 'OFF'}   Scale {'ON' if settings.get('scale') else 'OFF'}"]
             if open_viewer:
                 lines.append('v Open video window')
             lines += ['s Save   r Check status', '0 Quit' if page == 'Main' else 'b / Esc Back', '', message]
