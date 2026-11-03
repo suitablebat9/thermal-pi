@@ -1,0 +1,5 @@
+#!/bin/bash
+set -eu
+root=$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve().parents[1])' "$0")
+cd "$root"
+exec "$root/.venv/bin/python" -m thermal_pi.terminal "$@"

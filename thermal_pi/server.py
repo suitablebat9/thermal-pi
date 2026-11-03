@@ -71,6 +71,13 @@ def create_app(engine):
         engine.save()
         return jsonify(saved=True)
 
+    @app.get('/api/frame')
+    def current_frame():
+        with engine.lock:
+            if not engine.status()['connected'] or engine.jpeg is None:
+                return jsonify(error=engine.error or 'Waiting for a fresh frame'), 503
+            return Response(engine.jpeg, mimetype='image/jpeg')
+
     @app.get('/stream.mjpg')
     def stream():
         def frames():
