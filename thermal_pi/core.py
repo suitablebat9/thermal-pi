@@ -14,7 +14,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 DEFAULTS = dict(palette='white', zoom=1, rotation=0, flip=False, gain='high',
-                range_on=False, spots=False, low_c=20, high_c=40, unit='C')
+                range_on=False, spots=False, scale=False, low_c=20, high_c=40, unit='C')
 PALETTES = ('white', 'black', 'iron', 'rainbow')
 
 
@@ -30,7 +30,7 @@ def validated(current, patch):
         raise ValueError('Rotation must be 0, 90, 180, or 270')
     if type(result['flip']) is not bool or result['gain'] not in ('low', 'high'):
         raise ValueError('Invalid flip or gain')
-    if any(type(result[key]) is not bool for key in ('range_on', 'spots')):
+    if any(type(result[key]) is not bool for key in ('range_on', 'spots', 'scale')):
         raise ValueError('Overlay switches must be on or off')
     if result['unit'] not in ('C', 'F'):
         raise ValueError('Temperature unit must be C or F')
@@ -62,21 +62,55 @@ def display_temp(celsius, unit):
     return celsius * 1.8 + 32 if unit == 'F' else celsius
 
 
+def draw_scale(image, palette, limits, unit):
+    low, high = limits
+    # Keep labels alongside the ramp and out of the bottom overlay caption.
+    x, y = image.width - 80, 38
+    height = 128
+    gradient = np.linspace(255, 0, height).round().astype(np.uint8)
+    if high == low:
+        gradient.fill(128)
+    bar = Image.fromarray(palette[gradient][:, None, :]).resize((12, height), Image.Resampling.NEAREST)
+    image.paste(bar, (x, y))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((x-1, y-1, x+12, y+height), outline='#888888')
+    stops = (0.5,) if high == low else (0, 0.5, 1)
+    for fraction in stops:
+        value = display_temp(high + fraction * (low-high), unit)
+        draw.text((x+17, y+round(fraction*(height-1))-5), f'{value:.1f} {unit}',
+                  fill='white', stroke_width=2, stroke_fill='black')
+
+
 def render(frame, settings, demo=False, temperatures=None):
     gray = visible_pixels(np.asarray(frame, dtype=np.uint8), settings)
-    colors = palette_table(settings['palette'])[gray]
+    palette = palette_table(settings['palette'])
+    colors = palette[gray]
+    overlays = settings['range_on'] or settings['spots'] or settings['scale']
+    limits = None
     temp = valid = None
-    if (settings['range_on'] or settings['spots']) and temperatures is not None:
+    if overlays and temperatures is not None:
         raw = visible_pixels(temperatures, settings)
         valid = (raw != 0) & (raw != 65535)
         temp = raw.astype(np.float32) / 64 - 273.15
+        if settings['scale'] and valid.any():
+            readings = temp[valid]
+            low, high = float(readings.min()), float(readings.max())
+            limits = low, high
+            # Assign scene and legend colors from the same temperature mapping.
+            indices = np.full(gray.shape, 128, dtype=np.uint8)
+            if high > low:
+                indices[valid] = np.rint((readings-low) * (255 / (high-low))).astype(np.uint8)
+            colors = palette[indices]
+            colors[~valid] = (45, 45, 45)
         if settings['range_on']:
             mask = valid & (temp >= settings['low_c']) & (temp <= settings['high_c'])
             colors[mask] = colors[mask] // 3 + np.array([0, 165, 70], dtype=np.uint8)
     im = Image.fromarray(colors)
     target = (480,640) if settings['rotation'] in (90,270) else (640,480)
     im = im.resize(target, Image.Resampling.NEAREST)
-    if settings['range_on'] or settings['spots']:
+    if limits is not None:
+        draw_scale(im, palette, limits, settings['unit'])
+    if overlays:
         draw = ImageDraw.Draw(im)
         unit = settings['unit']
         labels = []
