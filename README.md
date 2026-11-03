@@ -2,6 +2,18 @@
 
 A headless Thermal Master P1 service for Raspberry Pi OS Lite 64-bit, a persistent numbered SSH control menu, and a clean Mac browser viewer. First version: **hardware testing on the Pi 3B+ and P1 is still required**. This is a bench prototype, not a flight-qualified video system.
 
+## One command on your Mac
+
+Type `thermal-pi` in Mac Terminal. On first use, enter your usual Pi SSH address, SSH port, and camera mode. The Mac remembers those choices. The numbered controls open first. Type **v** and press **Enter** to open the video window. You can close the window and use **v** again. Type **0** to end the session. Run `thermal-pi --setup` when you move from the emulator to the physical Pi.
+
+On another Mac, install the shortcut from your Mac checkout by linking `scripts/thermal-view` to a directory on your PATH. For example, with Homebrew:
+
+```sh
+ln -s "$PWD/scripts/thermal-view" "$(brew --prefix)/bin/thermal-pi"
+```
+
+The Pi needs the version containing `thermal_pi.window_session`. If you installed an earlier version, run `cd ~/thermal-pi && git pull --ff-only` on the Pi once.
+
 ## Open a video window on your Mac
 
 The Mac launcher opens the camera's JPEG stream in an **ffplay window** and keeps the numbered control menu in Terminal. The SSH connection carries both. Each thermal sensor pixel comes from the P1's native 160 × 120 image. The Pi scales that image for display. Double-click the player for fullscreen. Enter 0 in the menu or close the player to end the session.

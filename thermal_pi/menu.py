@@ -9,7 +9,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8080)
     args = parser.parse_args()
-    base = f'http://127.0.0.1:{args.port}'
+    run_menu(args.port)
+
+
+def run_menu(port, open_viewer=None):
+    base = f'http://127.0.0.1:{port}'
     def api(path, payload=None):
         data = None if payload is None else json.dumps(payload).encode()
         req = Request(base+path, data=data, headers={'Content-Type':'application/json'})
@@ -21,8 +25,13 @@ def main():
             print('\nTHERMAL PI' + (' [DEMO]' if s['demo'] else ''))
             print('LIVE' if s['connected'] else 'OFFLINE: '+str(s['error']))
             print(s['settings'], '\nHardware:', s['command'])
-            print('1 White hot  2 Black hot  3 Iron  4 Rainbow\n5 Zoom  6 Rotation  7 Flip\n8 Shutter calibration  9 Gain high/low\ns Save settings  Enter Refresh  0 Exit menu (camera keeps running)')
+            print('1 White hot  2 Black hot  3 Iron  4 Rainbow\n5 Zoom  6 Rotation  7 Flip\n8 Shutter calibration  9 Gain high/low\ns Save settings  Enter Refresh  0 Exit menu')
+            if open_viewer:
+                print('v Open video window')
             choice = input('Choose: ').strip().lower()
+            if choice == 'v' and open_viewer:
+                open_viewer()
+                continue
             if choice == '0':
                 return
             if choice in ('1','2','3','4'):
@@ -50,7 +59,7 @@ def main():
         except ValueError as exc:
             print('Invalid value:', exc)
         except (EOFError, KeyboardInterrupt):
-            print('\nMenu closed. Camera service continues.')
+            print('\nMenu closed.')
             return
 
 if __name__ == '__main__':
