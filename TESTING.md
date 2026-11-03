@@ -25,3 +25,5 @@ The seventh test runs the terminal viewer in an 80-column, 24-row pseudo-termina
 9. Measure end-to-end latency, frame rate, CPU load, temperature and power stability over at least 15 minutes.
 
 Use bench power first. No payload, flight range, hotspot, or compass-interference tests have been performed. The Flask development server is used intentionally for this localhost-only bench prototype; reassess serving/streaming architecture before wider deployment.
+
+The Mac window path was exercised with the demo service and a real ffplay process. The player decoded successive changing 640 × 480 JPEG frames. Remote SSH transport and physical P1 performance still need a test on the target Pi.

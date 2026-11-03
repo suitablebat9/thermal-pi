@@ -2,6 +2,26 @@
 
 A headless Thermal Master P1 service for Raspberry Pi OS Lite 64-bit, a persistent numbered SSH control menu, and a clean Mac browser viewer. First version: **hardware testing on the Pi 3B+ and P1 is still required**. This is a bench prototype, not a flight-qualified video system.
 
+## Open a video window on your Mac
+
+The Mac launcher opens the camera's JPEG stream in an **ffplay window** and keeps the numbered control menu in Terminal. The SSH connection carries both. Each thermal sensor pixel comes from the P1's native 160 × 120 image. The Pi scales that image for display. Double-click the player for fullscreen. Enter 0 in the menu or close the player to end the session.
+
+On the Pi, update the installed copy with `cd ~/thermal-pi && git pull --ff-only`. On your Mac, clone this repo or update your Mac checkout. The launcher needs Python 3, SSH, and ffplay on your Mac. If ffplay is missing, install it with `brew install ffmpeg`.
+
+From the **Mac checkout** run:
+
+```sh
+./scripts/thermal-view YOUR_USER@thermalpi.local
+```
+
+For an emulator, add `--demo` and use your usual SSH address and port. For example, if you normally run `ssh -p 2222 YOUR_USER@localhost`, use:
+
+```sh
+./scripts/thermal-view --demo -p 2222 YOUR_USER@localhost
+```
+
+The remote checkout is expected at `~/thermal-pi`. The launcher starts the service if needed and reuses a running service of the same mode. A terminal-only preview is also available below.
+
 ## Watch directly in your SSH terminal
 
 After installation, log into the Pi in Mac Terminal and type `thermal`. In the emulator, type `thermal --demo`. The terminal becomes the viewer. Use a UTF-8 terminal with 256-color support. Video resolution follows the size of the terminal in rows and columns, so a larger window shows more detail. The existing browser viewer provides the full JPEG image.
