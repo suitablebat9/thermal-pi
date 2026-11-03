@@ -8,7 +8,11 @@ from urllib.request import Request, urlopen
 PAGES = {
     'Main': ['1 White hot     2 Black hot', '3 Iron          4 Rainbow',
              '5 Zoom          6 Rotation', '7 Flip          8 Calibrate shutter',
-             '9 Gain'],
+             '9 Gain          t Temperatures'],
+    'Temperatures': ['i Toggle green range    m Toggle hot/cold spots',
+                     '1 Select lower bound    2 Select upper bound',
+                     '+ / - Adjust by 1 degree    [ / ] Adjust by 10',
+                     'u Switch Celsius / Fahrenheit'],
     'Zoom': ['+ / Right   Zoom in 0.25x', '- / Left    Zoom out 0.25x',
              '1–8         Jump to that zoom'],
     'Rotation': ['+ / Right   Rotate clockwise 90°', '- / Left    Rotate counterclockwise 90°',
@@ -33,6 +37,7 @@ def run_menu(port, open_viewer=None, pause_viewer=None, events=None):
         screen.keypad(True)
         screen.timeout(300)
         page, message, status = 'Main', '', {}
+        bound = 'low_c'
         key = 'r'
         while True:
             try:
@@ -50,6 +55,22 @@ def run_menu(port, open_viewer=None, pause_viewer=None, events=None):
                 elif key == 's':
                     api('save', {})
                     message = 'Settings saved'
+                elif page == 'Main' and key == 't':
+                    if 'range_on' in settings:
+                        page, message = 'Temperatures', ''
+                    else:
+                        message = 'Update and restart the camera service on the Pi for temperatures.'
+                elif page == 'Temperatures' and settings:
+                    if key in ('1', '2'):
+                        bound = 'low_c' if key == '1' else 'high_c'
+                    elif key in ('i', 'm'):
+                        toggle = 'range_on' if key == 'i' else 'spots'
+                        patch[toggle] = not settings[toggle]
+                    elif key == 'u':
+                        patch['unit'] = 'F' if settings['unit'] == 'C' else 'C'
+                    elif key in ('+', '=', '-', '[', ']'):
+                        step = {'[':-10, ']':10, '-':-1, '+':1, '=':1}[key]
+                        patch[bound] = settings[bound] + (step / 1.8 if settings['unit'] == 'F' else step)
                 elif page == 'Main' and key in ('5', '6', '9'):
                     page = {'5':'Zoom', '6':'Rotation', '9':'Gain'}[key]
                     message = ''
@@ -96,6 +117,14 @@ def run_menu(port, open_viewer=None, pause_viewer=None, events=None):
             if settings and not status['connected']:
                 summary = 'OFFLINE   ' + summary
             lines = [title, summary, '', *PAGES[page], '']
+            if page == 'Temperatures' and 'range_on' in settings:
+                unit = settings['unit']
+                low, high = settings['low_c'], settings['high_c']
+                if unit == 'F':
+                    low, high = low * 1.8 + 32, high * 1.8 + 32
+                lines += [f"Range {'ON' if settings['range_on'] else 'OFF'}: {low:.1f}–{high:.1f} {unit}"
+                          + f"    Editing {'lower' if bound == 'low_c' else 'upper'}",
+                          f"Hot/cold spots {'ON' if settings['spots'] else 'OFF'}"]
             if open_viewer:
                 lines.append('v Open video window')
             lines += ['s Save   r Check status', '0 Quit' if page == 'Main' else 'b / Esc Back', '', message]

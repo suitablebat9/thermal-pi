@@ -843,9 +843,15 @@ class P3Camera:
 
         # Read frame data into pre-allocated buffer
         # This includes: start marker (12) + pixel data (frame_size) + end marker (12)
+        # Thermal Pi: bound synchronization time so a broken frame cannot stall
+        # the viewer indefinitely. The next read can find the next frame boundary.
         pos = 0
+        deadline = time.monotonic() + 0.75
         while pos < frame_read_size:
-            n = self.dev.read(0x81, chunk_buf, 10000)
+            remaining_ms = int((deadline - time.monotonic()) * 1000)
+            if remaining_ms <= 0:
+                raise TimeoutError("Timed out finding a complete P1 frame")
+            n = self.dev.read(0x81, chunk_buf, remaining_ms)
 
             next_pos = pos + n
 
