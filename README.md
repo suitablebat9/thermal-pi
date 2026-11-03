@@ -2,6 +2,22 @@
 
 A headless Thermal Master P1 service for Raspberry Pi OS Lite 64-bit, a persistent numbered SSH control menu, and a clean Mac browser viewer. First version: **hardware testing on the Pi 3B+ and P1 is still required**. This is a bench prototype, not a flight-qualified video system.
 
+## Watch directly in your SSH terminal
+
+After installation, log into the Pi in Mac Terminal and type `thermal`. In the emulator, type `thermal --demo`. The terminal becomes the viewer. Use a UTF-8 terminal with 256-color support. Video resolution follows the size of the terminal in rows and columns, so a larger window shows more detail. The existing browser viewer provides the full JPEG image.
+
+Press **1** for white hot, **2** for black hot, **3** for iron, or **4** for rainbow. Keys take effect immediately. Use **+ / -** for zoom, **r** for rotation, **f** to flip, **c** to calibrate, **h / l** for high or low gain, **s** to save settings, and **q** to quit. The viewer restores your shell on exit. It attaches to an existing camera service or starts a temporary one for this session. Demo uses port 8082 and real capture uses 8080.
+
+**Updating an existing Git clone on the Pi** takes one setup step:
+
+```sh
+cd ~/thermal-pi && git pull --ff-only && sudo ln -sfn "$PWD/scripts/thermal" /usr/local/bin/thermal
+```
+
+If the boot service was active, run `sudo systemctl restart thermal-pi` once to load the new viewer endpoint. If you were running the older foreground server manually, stop it with Ctrl-C first. For a ZIP installation, replace the source files from the updated download, run `chmod +x scripts/thermal` from the project folder, and create the same symlink. Fresh installs create the command automatically.
+
+From a Mac you can also connect and launch in one step with `ssh -t YOUR_USER@thermalpi.local thermal`. Substitute your usual Pi address and SSH port.
+
 ## What works in this version
 
 - Software palettes: white hot, black hot, iron, rainbow (our palettes, not exact manufacturer app replicas).

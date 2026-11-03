@@ -10,5 +10,7 @@ sudo usermod -aG thermal "$(id -un)"
 printf '%s\n' 'SUBSYSTEM=="usb", ATTR{idVendor}=="3474", ATTR{idProduct}=="45c2", GROUP="thermal", MODE="0660"' | sudo tee /etc/udev/rules.d/70-thermal-p1.rules >/dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=usb
+chmod +x scripts/thermal
+sudo ln -sfn "$PWD/scripts/thermal" /usr/local/bin/thermal
 echo 'Installed. Log out and back in for USB permissions; reconnect the camera.'
-echo 'Then run: .venv/bin/python -m thermal_pi.server'
+echo 'Then run: thermal (or thermal --demo without a camera)'
