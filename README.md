@@ -4,7 +4,7 @@ A headless Thermal Master P1 service for Raspberry Pi OS Lite 64-bit, a persiste
 
 ## One command on your Mac
 
-Type `thermal-pi` in Mac Terminal. On first use, enter your usual Pi SSH address, SSH port, and camera mode. The Mac remembers those choices. The numbered controls open first. Type **v** and press **Enter** to open the video window. You can close the window and use **v** again. Type **0** to end the session. Run `thermal-pi --setup` when you move from the emulator to the physical Pi.
+Type `thermal-pi` in Mac Terminal. On first use, enter your usual Pi SSH address, SSH port, and camera mode. The Mac remembers those choices. The numbered controls open first. Press **v** to open the video window. You can close the window and use **v** again. Press **0** on the main screen to end the session. Run `thermal-pi --setup` when you move from the emulator to the physical Pi.
 
 On another Mac, install the shortcut from your Mac checkout by linking `scripts/thermal-view` to a directory on your PATH. For example, with Homebrew:
 
@@ -110,7 +110,7 @@ cd ~/thermal-pi
 .venv/bin/python -m thermal_pi.menu
 ```
 
-Open **http://127.0.0.1:8080** in your Mac browser. The tunnel must remain open. Press Fullscreen for an image-only view; status appears if the feed becomes stale. The menu stays open: type a number, then Enter. `s` saves settings, Enter refreshes status, `0` exits just the menu. A queued hardware command is not yet confirmed: press Enter to inspect completion.
+Open **http://127.0.0.1:8080** in your Mac browser. The tunnel must remain open. Press Fullscreen for an image-only view; status appears if the feed becomes stale. Press a number once. Zoom, rotation, and gain have their own screens. Use +/− or the left/right arrows repeatedly for zoom and rotation, then b or Esc to go back. `s` saves settings, r refreshes status, `0` exits just the menu. A queued hardware command is not yet confirmed: press r to inspect completion.
 
 If Mac port 8080 is occupied, use `-L 8081:127.0.0.1:8080` and browse to port 8081. The menu on the Pi still uses port 8080.
 
