@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Mac launcher: open the Pi's JPEG feed in an ffplay window through SSH."""
+import argparse
+import pathlib
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('host', help='SSH alias or username@hostname')
+    parser.add_argument('-p', '--ssh-port', type=int, help='custom SSH port, including emulator forwarding')
+    parser.add_argument('--demo', action='store_true', help='use simulated frames')
+    args = parser.parse_args()
+    if args.host.startswith('-'):
+        parser.error('invalid SSH destination')
+    ffplay = shutil.which('ffplay')
+    if not ffplay:
+        parser.exit(1, 'Install ffplay on the Mac first (brew install ffmpeg).\n')
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        local_port = listener.getsockname()[1]
+    remote_port = 8082 if args.demo else 8080
+    tunnel = f'127.0.0.1:{local_port}:127.0.0.1:{remote_port}'
+    command = ['ssh', '-T', '-o', 'ExitOnForwardFailure=yes', '-L', tunnel]
+    if args.ssh_port:
+        command.extend(['-p', str(args.ssh_port)])
+    remote = 'cd ~/thermal-pi && exec .venv/bin/python -m thermal_pi.window_session'
+    if args.demo:
+        remote += ' --demo'
+    command.extend([args.host, remote])
+    with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as ssh:
+        player = None
+        menu = None
+        try:
+            for line in ssh.stdout:
+                if line.strip() == b'THERMAL_READY':
+                    break
+            else:
+                parser.exit(1, 'SSH camera startup failed. Check the SSH address and update ~/thermal-pi on the Pi.\n')
+            url = f'http://127.0.0.1:{local_port}/stream.mjpg'
+            with tempfile.TemporaryFile() as errors:
+                player = subprocess.Popen([ffplay, '-hide_banner', '-loglevel', 'error',
+                    '-f', 'mpjpeg', '-probesize', '32', '-analyzeduration', '0',
+                    '-framedrop', '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else ''),
+                    url], stdin=subprocess.DEVNULL, stderr=errors)
+                root = pathlib.Path(__file__).resolve().parents[1]
+                menu = subprocess.Popen([sys.executable, '-m', 'thermal_pi.menu', '--port', str(local_port)], cwd=root)
+                while ssh.poll() is None and menu.poll() is None and player.poll() is None:
+                    time.sleep(.2)
+                if player.returncode:
+                    errors.seek(0)
+                    parser.exit(1, errors.read().decode(errors='replace') or 'Video player exited.\n')
+                if ssh.poll() is not None:
+                    parser.exit(1, 'SSH disconnected.\n')
+        except KeyboardInterrupt:
+            pass
+        finally:
+            for process in (menu, player):
+                if process and process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+            ssh.stdin.close()
+            try:
+                ssh.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                ssh.kill()
+                ssh.wait()
+
+
+if __name__ == '__main__':
+    main()
