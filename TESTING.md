@@ -6,11 +6,13 @@
 - Ran the actual HTTP demo service and inspected its browser image and demo warning.
 - Exercised the persistent terminal menu against the running service: black-hot selection, saving, and exit while service remained live.
 - Both installation scripts pass Bash syntax validation.
-- USB driver preserved unchanged from the pinned upstream commit.
+- USB driver comes from the pinned upstream commit with a local read deadline.
 
 Environment: macOS, Python 3.15, dependency ranges from requirements.txt. This is not evidence of Raspberry Pi or camera hardware compatibility.
 
 The seventh test runs the terminal viewer in an 80-column, 24-row pseudo-terminal, receives a real HTTP demo frame, changes the palette with the 2 key, and verifies that q restores the shell. A separate launch check verified automatic demo service startup and exit. Physical USB capture and SSH bandwidth on the Pi remain unmeasured.
+
+Temperature tests cover aligned highlights after zoom/rotation/flip, spot drawing, saved-settings compatibility, and recovery from one malformed frame without reopening the camera. Hardware shutter duration and absolute temperature accuracy still need measurement.
 
 ## Pending on Pi 3B+ / Raspberry Pi OS Lite 64-bit
 

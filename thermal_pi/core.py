@@ -2,6 +2,8 @@
 import io
 import json
 import logging
+import math
+from functools import lru_cache
 import os
 from pathlib import Path
 import queue
@@ -11,7 +13,8 @@ import time
 import numpy as np
 from PIL import Image, ImageDraw
 
-DEFAULTS = dict(palette='white', zoom=1, rotation=0, flip=False, gain='high')
+DEFAULTS = dict(palette='white', zoom=1, rotation=0, flip=False, gain='high',
+                range_on=False, spots=False, low_c=20, high_c=40, unit='C')
 PALETTES = ('white', 'black', 'iron', 'rainbow')
 
 
@@ -27,28 +30,74 @@ def validated(current, patch):
         raise ValueError('Rotation must be 0, 90, 180, or 270')
     if type(result['flip']) is not bool or result['gain'] not in ('low', 'high'):
         raise ValueError('Invalid flip or gain')
+    if any(type(result[key]) is not bool for key in ('range_on', 'spots')):
+        raise ValueError('Overlay switches must be on or off')
+    if result['unit'] not in ('C', 'F'):
+        raise ValueError('Temperature unit must be C or F')
+    if any(type(result[k]) not in (int, float) or not math.isfinite(result[k])
+           for k in ('low_c', 'high_c')) or not -273.15 <= result['low_c'] < result['high_c'] <= 750:
+        raise ValueError('Range needs a lower bound below its upper bound (-273.15 to 750 C)')
     return result
 
 
-def render(frame, settings, demo=False):
-    gray = np.asarray(frame, dtype=np.uint8)
+def visible_pixels(gray, settings):
     h, w = gray.shape
     ch, cw = max(1, int(h/settings['zoom'])), max(1, int(w/settings['zoom']))
     gray = gray[(h-ch)//2:(h-ch)//2+ch, (w-cw)//2:(w-cw)//2+cw]
     gray = np.rot90(gray, -(settings['rotation']//90))
-    if settings['flip']:
-        gray = np.fliplr(gray)
+    return np.fliplr(gray) if settings['flip'] else gray
+
+
+@lru_cache(maxsize=4)
+def palette_table(palette):
     anchors = {
         'white': [(0,0,0),(255,255,255)],
         'black': [(255,255,255),(0,0,0)],
         'iron': [(0,0,0),(70,0,100),(190,30,40),(255,170,0),(255,255,230)],
         'rainbow': [(0,0,100),(0,120,255),(0,220,80),(255,230,0),(255,0,0)],
-    }[settings['palette']]
-    table = np.stack([np.interp(np.arange(256), np.linspace(0,255,len(anchors)),
+    }[palette]
+    return np.stack([np.interp(np.arange(256), np.linspace(0,255,len(anchors)),
                                np.array(anchors)[:,i]) for i in range(3)], axis=1).astype('uint8')
-    im = Image.fromarray(table[gray])
+def display_temp(celsius, unit):
+    return celsius * 1.8 + 32 if unit == 'F' else celsius
+
+
+def render(frame, settings, demo=False, temperatures=None):
+    gray = visible_pixels(np.asarray(frame, dtype=np.uint8), settings)
+    colors = palette_table(settings['palette'])[gray]
+    temp = valid = None
+    if (settings['range_on'] or settings['spots']) and temperatures is not None:
+        raw = visible_pixels(temperatures, settings)
+        valid = (raw != 0) & (raw != 65535)
+        temp = raw.astype(np.float32) / 64 - 273.15
+        if settings['range_on']:
+            mask = valid & (temp >= settings['low_c']) & (temp <= settings['high_c'])
+            colors[mask] = colors[mask] // 3 + np.array([0, 165, 70], dtype=np.uint8)
+    im = Image.fromarray(colors)
     target = (480,640) if settings['rotation'] in (90,270) else (640,480)
     im = im.resize(target, Image.Resampling.NEAREST)
+    if settings['range_on'] or settings['spots']:
+        draw = ImageDraw.Draw(im)
+        unit = settings['unit']
+        labels = []
+        if temp is None or not valid.any():
+            labels.append('Temperature data unavailable')
+        else:
+            if settings['range_on']:
+                low = display_temp(settings['low_c'], unit)
+                high = display_temp(settings['high_c'], unit)
+                labels.append(f'Green: {low:.1f} to {high:.1f} {unit}')
+            if settings['spots']:
+                for name, color, func, replace in [('HOT', '#ff533f', np.argmax, -np.inf),
+                                                   ('COLD', '#39bbff', np.argmin, np.inf)]:
+                    y, x = np.unravel_index(func(np.where(valid, temp, replace)), temp.shape)
+                    px = int((x + .5) * im.width / temp.shape[1])
+                    py = int((y + .5) * im.height / temp.shape[0])
+                    radius = 8 if name == 'HOT' else 5
+                    draw.ellipse((px-radius,py-radius,px+radius,py+radius), outline='black', width=3)
+                    draw.ellipse((px-radius,py-radius,px+radius,py+radius), outline=color, width=2)
+                    labels.append(f'{name} {display_temp(temp[y,x], unit):.1f} {unit}')
+        draw.text((5, im.height-17), '   '.join(labels), fill='white', stroke_width=2, stroke_fill='black')
     if demo:
         ImageDraw.Draw(im).text((12,12), 'DEMO - simulated camera', fill=(255,80,80), stroke_width=1, stroke_fill=(0,0,0))
     out = io.BytesIO()
@@ -108,6 +157,7 @@ class Engine:
 
     def run(self):
         camera = None
+        bad_reads = 0
         while not self.stop.is_set():
             try:
                 if not self.demo and camera is None:
@@ -139,17 +189,29 @@ class Engine:
                     y,x = np.mgrid[:120,:160]
                     phase = time.monotonic()
                     frame = np.clip(35+x/3+180*np.exp(-((x-80-35*np.sin(phase))**2+(y-60)**2)/200),0,255).astype('uint8')
+                    temperatures = ((15 + frame.astype(np.float32) / 8 + 273.15) * 64).astype(np.uint16)
                     # Demo label is burned into the synthetic image, including the raw feed.
                     im = Image.fromarray(frame)
                     ImageDraw.Draw(im).text((3,3),'DEMO',fill=255)
                     frame = np.array(im)
                 else:
-                    frame, _ = camera.read_frame_both()
-                    if frame is None:
-                        raise RuntimeError('Camera returned no image')
+                    from usb.core import USBTimeoutError
+                    from .vendor.p3_camera import FrameMarkerMismatchError
+                    try:
+                        frame, temperatures = camera.read_frame_both()
+                        if frame is None:
+                            raise FrameMarkerMismatchError('Incomplete P1 frame')
+                    except (FrameMarkerMismatchError, USBTimeoutError, TimeoutError) as exc:
+                        bad_reads += 1
+                        if bad_reads >= 8:
+                            raise RuntimeError('P1 stream failed to resynchronize') from exc
+                        if bad_reads == 1:
+                            logging.info('Skipped interrupted P1 frame: %s', exc)
+                        continue
+                    bad_reads = 0
                 with self.lock:
                     settings = self.settings.copy()
-                jpeg = render(frame, settings, demo=self.demo)
+                jpeg = render(frame, settings, demo=self.demo, temperatures=temperatures)
                 with self.lock:
                     self.jpeg, self.updated = jpeg, time.monotonic()
                     self.sequence += 1
@@ -176,6 +238,7 @@ class Engine:
                     except Exception:
                         logging.exception('Camera cleanup failed')
                     camera = None
+                bad_reads = 0
                 self.stop.wait(2)
         if camera:
             import usb.util

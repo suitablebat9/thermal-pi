@@ -14,6 +14,12 @@ ln -s "$PWD/scripts/thermal-view" "$(brew --prefix)/bin/thermal-pi"
 
 The Pi needs the version containing `thermal_pi.window_session`. If you installed an earlier version, run `cd ~/thermal-pi && git pull --ff-only` on the Pi once.
 
+## Temperature overlays and calibration pauses
+
+Press **t** on the main controls screen. **i** toggles a green highlight for pixels in the selected temperature range (initially 20–40 °C). **m** independently toggles red hottest and blue coldest spots and their readings in the visible image. Select the lower or upper bound with **1 / 2**, adjust with **+ / -** (one degree) or **[ / ]** (ten degrees). **u** switches °C / °F. **s** saves preferences and **b** returns. Both overlays start off. Readings use the P1's temperature plane. Demo temperatures are synthetic.
+
+Brief gaps can occur when the shutter closes. Capture skips isolated interrupted frames and reconnects after repeated failures. Overlays update with each fresh frame. To update the physical Pi, stop the current viewer, run `cd ~/thermal-pi && git pull --ff-only` in a Pi SSH session, and restart the boot service if active (`sudo systemctl try-restart thermal-pi`). Start `thermal-pi` again on the Mac.
+
 ## Open a video window on your Mac
 
 The Mac launcher opens the camera's JPEG stream in an **ffplay window** and keeps the numbered control menu in Terminal. The SSH connection carries both. Each thermal sensor pixel comes from the P1's native 160 × 120 image. The Pi scales that image for display. Double-click the player for fullscreen. Enter 0 in the menu or close the player to end the session.
@@ -60,7 +66,7 @@ From a Mac you can also connect and launch in one step with `ssh -t YOUR_USER@th
 - Clearly marked synthetic demo mode. No camera required.
 - Localhost-only HTTP service reached through SSH. No cloud account or internet needed during use.
 
-No automatic gain (upstream protocol does not implement it), temperature measurements, manufacturer AI enhancement, recording, motor/gimbal control, or hotspot configuration yet. The underlying driver has temperature-related code, but this application deliberately does not present unverified temperature readings.
+No automatic gain (upstream protocol does not implement it), manufacturer AI enhancement, recording, motor/gimbal control, or hotspot configuration yet. Overlay readings are camera-reported estimates; accuracy has not been checked against a reference.
 
 ## 1. Flash and connect
 
@@ -183,6 +189,6 @@ Apache-2.0; see LICENSE and NOTICE. Only the USB driver is vendored from:
 https://github.com/skywalker1905/thermal-camera-viewer
 
 Pinned upstream commit: `512b46e7d0701c05bfecc5cb096061c5967be860`.
-Vendored path: `thermal_pi/vendor/p3_camera.py`, unchanged. It derives from Joshua V. Dillon and contributors' https://github.com/jvdillon/p3-ir-camera. The Qt GUI and virtual webcam layer are not needed. Application code in the other files is new. Check upstream changes deliberately rather than silently downloading a new driver at startup.
+Vendored path: `thermal_pi/vendor/p3_camera.py`, with a bounded USB frame-read deadline. It derives from Joshua V. Dillon and contributors' https://github.com/jvdillon/p3-ir-camera. The Qt GUI and virtual webcam layer are not needed. Application code in the other files is new. Check upstream changes deliberately rather than silently downloading a new driver at startup.
 
 The Pi installer uses OS-managed dependency versions for ARM compatibility. `requirements.txt` defines supported ranges for local demos; this is not a reproducible lock of every future OS package version.
