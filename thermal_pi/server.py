@@ -75,7 +75,7 @@ def create_app(engine):
 
     @app.get('/api/field-frame')
     def field_frame():
-        quality = request.args.get('quality', 60, type=int)
+        quality = request.args.get('quality', 85, type=int)
         if not 25 <= quality <= 90:
             raise ValueError('JPEG quality must be 25–90')
         with engine.lock:

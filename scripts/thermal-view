@@ -75,12 +75,12 @@ def main():
     parser.add_argument('-p', '--ssh-port', type=int, help='custom SSH port, including emulator forwarding')
     parser.add_argument('--demo', action='store_true', help='use simulated frames')
     parser.add_argument('--field', action='store_true', help='native-resolution field link')
-    parser.add_argument('--fps', type=int, default=8, help='field frame rate cap (1–25)')
-    parser.add_argument('--quality', type=int, default=60, help='field JPEG quality (25–90)')
+    parser.add_argument('--fps', type=int, help='field frame rate cap (default: 25 for P1, 4 for demo)')
+    parser.add_argument('--quality', type=int, default=85, help='field JPEG quality (25–90, default 85)')
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parents[1]
     if args.field:
-        if not 1 <= args.fps <= 25 or not 25 <= args.quality <= 90:
+        if (args.fps is not None and not 1 <= args.fps <= 25) or not 25 <= args.quality <= 90:
             parser.error('Use --fps 1–25 and --quality 25–90.')
         python = root / '.venv-field/bin/python'
         if not python.exists():
@@ -95,6 +95,8 @@ def main():
         args.host = host
         args.ssh_port = args.ssh_port or port
         args.demo = args.demo or demo
+    if args.fps is None:
+        args.fps = 4 if args.demo else 25
     if args.host.startswith('-'):
         parser.error('invalid SSH destination')
     ffplay = shutil.which('ffplay')
@@ -135,7 +137,7 @@ def main():
                                '-probesize', '32', '-analyzeduration', '0', '-framedrop', '-autoexit',
                                '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else '')]
                     if args.field:
-                        player = subprocess.Popen(options + ['-f', 'mjpeg', '-framerate', str(args.fps),
+                        player = subprocess.Popen(options + ['-f', 'ppm_pipe', '-framerate', str(args.fps),
                                                   '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
                         threading.Thread(target=feed, args=(player, local_port, args.fps, args.quality,
                                          events.put if menu_first else print), daemon=True).start()
