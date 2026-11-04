@@ -40,7 +40,7 @@ def feed(player, port, fps, quality, notify):
                 picture = Image.new('RGB', (640,480), '#17171a')
                 ImageDraw.Draw(picture).text((20,25), 'NO LIVE VIDEO - reconnecting', fill='white')
                 time.sleep(.3)
-            picture.save(player.stdin, format='JPEG', quality=90)
+            picture.save(player.stdin, format='PPM')
             player.stdin.flush()
             elapsed = time.monotonic()-started
             if elapsed >= 5:
