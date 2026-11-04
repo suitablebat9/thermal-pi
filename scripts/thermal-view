@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Mac launcher: open the Pi's JPEG feed in an ffplay window through SSH."""
 import argparse
+import os
 import json
 import pathlib
 import shutil
@@ -73,7 +74,21 @@ def main():
     parser.add_argument('host', nargs='?', help='SSH alias or username@hostname')
     parser.add_argument('-p', '--ssh-port', type=int, help='custom SSH port, including emulator forwarding')
     parser.add_argument('--demo', action='store_true', help='use simulated frames')
+    parser.add_argument('--field', action='store_true', help='native-resolution field link')
+    parser.add_argument('--fps', type=int, default=8, help='field frame rate cap (1–25)')
+    parser.add_argument('--quality', type=int, default=60, help='field JPEG quality (25–90)')
     args = parser.parse_args()
+    root = pathlib.Path(__file__).resolve().parents[1]
+    if args.field:
+        if not 1 <= args.fps <= 25 or not 25 <= args.quality <= 90:
+            parser.error('Use --fps 1–25 and --quality 25–90.')
+        python = root / '.venv-field/bin/python'
+        if not python.exists():
+            parser.exit(1, 'From the Mac checkout run: bash scripts/install-mac-field.sh\n')
+        if pathlib.Path(sys.prefix) != python.parent.parent:
+            os.execv(str(python), [str(python), *sys.argv])
+        sys.path.insert(0, str(root))
+        from thermal_pi.field import feed
     menu_first = args.host is None or pathlib.Path(sys.argv[0]).name == 'thermal-pi'
     if args.host is None:
         host, port, demo = connection(parser, args.setup)
@@ -117,9 +132,14 @@ def main():
                     if player and player.poll() is None:
                         return 'Video window is already open.'
                     options = [ffplay, '-hide_banner', '-loglevel', 'error',
-                               '-probesize', '32', '-analyzeduration', '0', '-framedrop',
+                               '-probesize', '32', '-analyzeduration', '0', '-framedrop', '-autoexit',
                                '-window_title', 'Thermal Pi' + (' - DEMO' if args.demo else '')]
-                    if args.demo:
+                    if args.field:
+                        player = subprocess.Popen(options + ['-f', 'mjpeg', '-framerate', str(args.fps),
+                                                  '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
+                        threading.Thread(target=feed, args=(player, local_port, args.fps, args.quality,
+                                         events.put if menu_first else print), daemon=True).start()
+                    elif args.demo:
                         player = subprocess.Popen(options + ['-f', 'mjpeg', '-framerate', '4',
                                                   '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
                         threading.Thread(target=feed_demo, args=(player, local_port, events.put if menu_first else print), daemon=True).start()

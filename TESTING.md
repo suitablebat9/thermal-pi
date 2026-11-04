@@ -31,3 +31,5 @@ Use bench power first. No payload, flight range, hotspot, or compass-interferenc
 The Mac window path was exercised with the demo service and a real ffplay process. The player decoded successive changing 640 × 480 JPEG frames. Remote SSH transport and physical P1 performance still need a test on the target Pi.
 
 Mac emulator playback requests one JPEG at a time at up to four frames per second. A local ffplay integration check decoded successive frames, applied black hot during playback, and read live status afterward. Retesting this change over the authenticated QEMU SSH connection is pending.
+
+Field comparison: 30 synthetic noisy thermal frames, iron palette, scale, range and spots. Average legacy JPEG 39,445 bytes; field quality 60 including overlay metadata 2,906 bytes (92.6% less per frame). This is a local payload comparison, not a radio-throughput or range measurement.
