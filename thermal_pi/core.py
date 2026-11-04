@@ -81,7 +81,7 @@ def draw_scale(image, palette, limits, unit):
                   fill='white', stroke_width=2, stroke_fill='black')
 
 
-def render(frame, settings, demo=False, temperatures=None):
+def native_picture(frame, settings, demo=False, temperatures=None):
     gray = visible_pixels(np.asarray(frame, dtype=np.uint8), settings)
     palette = palette_table(settings['palette'])
     colors = palette[gray]
@@ -105,15 +105,12 @@ def render(frame, settings, demo=False, temperatures=None):
         if settings['range_on']:
             mask = valid & (temp >= settings['low_c']) & (temp <= settings['high_c'])
             colors[mask] = colors[mask] // 3 + np.array([0, 165, 70], dtype=np.uint8)
-    im = Image.fromarray(colors)
-    target = (480,640) if settings['rotation'] in (90,270) else (640,480)
-    im = im.resize(target, Image.Resampling.NEAREST)
-    if limits is not None:
-        draw_scale(im, palette, limits, settings['unit'])
+    info = dict(size=(480,640) if settings['rotation'] in (90,270) else (640,480),
+                palette=settings['palette'], limits=limits, unit=settings['unit'],
+                labels=[], marks=[], demo=demo)
     if overlays:
-        draw = ImageDraw.Draw(im)
         unit = settings['unit']
-        labels = []
+        labels = info['labels']
         if temp is None or not valid.any():
             labels.append('Temperature data unavailable')
         else:
@@ -125,15 +122,32 @@ def render(frame, settings, demo=False, temperatures=None):
                 for name, color, func, replace in [('HOT', '#ff533f', np.argmax, -np.inf),
                                                    ('COLD', '#39bbff', np.argmin, np.inf)]:
                     y, x = np.unravel_index(func(np.where(valid, temp, replace)), temp.shape)
-                    px = int((x + .5) * im.width / temp.shape[1])
-                    py = int((y + .5) * im.height / temp.shape[0])
-                    radius = 8 if name == 'HOT' else 5
-                    draw.ellipse((px-radius,py-radius,px+radius,py+radius), outline='black', width=3)
-                    draw.ellipse((px-radius,py-radius,px+radius,py+radius), outline=color, width=2)
+                    info['marks'].append((float((x+.5)/temp.shape[1]), float((y+.5)/temp.shape[0]), name, color))
                     labels.append(f'{name} {display_temp(temp[y,x], unit):.1f} {unit}')
+    return Image.fromarray(colors), info
+
+
+def enlarge_picture(native, info):
+    im = native.resize(tuple(info['size']), Image.Resampling.NEAREST)
+    if info['limits'] is not None:
+        draw_scale(im, palette_table(info['palette']), info['limits'], info['unit'])
+    draw = ImageDraw.Draw(im)
+    for x, y, name, color in info['marks']:
+        px, py = int(x*im.width), int(y*im.height)
+        radius = 8 if name == 'HOT' else 5
+        box = (px-radius,py-radius,px+radius,py+radius)
+        draw.ellipse(box, outline='black', width=3)
+        draw.ellipse(box, outline=color, width=2)
+    if info['labels']:
+        labels = info['labels']
         draw.text((5, im.height-17), '   '.join(labels), fill='white', stroke_width=2, stroke_fill='black')
-    if demo:
+    if info['demo']:
         ImageDraw.Draw(im).text((12,12), 'DEMO - simulated camera', fill=(255,80,80), stroke_width=1, stroke_fill=(0,0,0))
+    return im
+
+
+def render(frame, settings, demo=False, temperatures=None):
+    im = enlarge_picture(*native_picture(frame, settings, demo, temperatures))
     out = io.BytesIO()
     im.save(out, format='JPEG', quality=85)
     return out.getvalue()
@@ -149,12 +163,21 @@ class Engine:
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.commands = queue.Queue(maxsize=8)
-        self.jpeg = None
+        self.latest = None
+        self._jpeg = None
         self.updated = 0
         self.sequence = 0
         self.error = 'Starting'
         self.command_status = 'No hardware command submitted'
         self.thread = threading.Thread(target=self.run, daemon=True)
+
+    @property
+    def jpeg(self):
+        # Legacy viewers request an enlarged JPEG; a field-only session never builds it.
+        with self.lock:
+            if self.latest is not None and self._jpeg is None:
+                self._jpeg = render(*self.latest)
+            return self._jpeg
 
     def status(self):
         with self.lock:
@@ -245,9 +268,10 @@ class Engine:
                     bad_reads = 0
                 with self.lock:
                     settings = self.settings.copy()
-                jpeg = render(frame, settings, demo=self.demo, temperatures=temperatures)
                 with self.lock:
-                    self.jpeg, self.updated = jpeg, time.monotonic()
+                    self.latest = (frame, settings, self.demo, temperatures)
+                    self._jpeg = None
+                    self.updated = time.monotonic()
                     self.sequence += 1
                     self.error = None
                 if self.demo:
@@ -256,7 +280,7 @@ class Engine:
                 logging.exception('Capture failed; retrying')
                 with self.lock:
                     self.error = str(exc)
-                    self.jpeg = None
+                    self.latest = self._jpeg = None
                     self.command_status = 'Capture error; pending commands discarded'
                     while not self.commands.empty():
                         self.commands.get_nowait()

@@ -1,8 +1,10 @@
 import argparse
+import io
+import json
 import logging
 import time
 from flask import Flask, Response, jsonify, request
-from .core import Engine
+from .core import Engine, native_picture
 
 PAGE = '''<!doctype html><html><head><meta name="viewport" content="width=device-width">
 <title>Thermal Pi</title><style>body{margin:0;background:#090b10;color:white;font:16px system-ui}
@@ -70,6 +72,26 @@ def create_app(engine):
     def save():
         engine.save()
         return jsonify(saved=True)
+
+    @app.get('/api/field-frame')
+    def field_frame():
+        quality = request.args.get('quality', 60, type=int)
+        if not 25 <= quality <= 90:
+            raise ValueError('JPEG quality must be 25–90')
+        with engine.lock:
+            if not engine.status()['connected'] or engine.latest is None:
+                return jsonify(error='Waiting for live camera data'), 503
+            capture, sequence = engine.latest, engine.sequence
+            if request.args.get('after', type=int) == sequence:
+                return Response(status=204)
+        native, info = native_picture(*capture)
+        if capture[1]['palette'] in ('white', 'black') and not capture[1]['range_on']:
+            native = native.convert('L')
+        data = io.BytesIO()
+        data.write(json.dumps(info, separators=(',', ':')).encode() + b'\n')
+        native.save(data, format='JPEG', quality=quality)
+        return Response(data.getvalue(), mimetype='application/octet-stream',
+                        headers={'X-Frame-Sequence': str(sequence)})
 
     @app.get('/api/frame')
     def current_frame():

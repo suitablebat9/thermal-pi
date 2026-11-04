@@ -14,6 +14,14 @@ ln -s "$PWD/scripts/thermal-view" "$(brew --prefix)/bin/thermal-pi"
 
 The Pi needs the version containing `thermal_pi.window_session`. If you installed an earlier version, run `cd ~/thermal-pi && git pull --ff-only` on the Pi once.
 
+## Field link testing
+
+On a Mac that already has the launcher, install its optional image dependencies once from the checkout with `bash scripts/install-mac-field.sh`. Update the Pi checkout and restart any active boot service first. Run `thermal-pi --field`, connect normally, and press **v**. The default requests up to 8 fps at JPEG quality 60. An alternative for a struggling link is `thermal-pi --field --fps 4 --quality 45`. Adjust fps from 1–25 and quality from 25–90. The original `thermal-pi` command still uses its previous stream format.
+
+The Pi sends a native-size JPEG (160×120 before crop/rotation) and a small header with the readings and marker positions. The Mac enlarges it and draws the scale and labels. Monochrome palettes use a one-channel JPEG when the green overlay is off. Each request picks up the newest frame, skips a duplicate, and allows only one outstanding request. A slow link lowers delivered frame rate. Every five seconds the menu reports delivered fps and video payload kb/s, excluding SSH, network headers and retransmissions.
+
+For a 1,000-foot test, start close with both devices on the ground and the DJI link active. Compare clear and tree-obstructed paths in steps, with the Pi and ground antenna at representative heights. Record delivered fps, stalls, and the time for a palette change at each stop. This mode needs an existing two-way IP link between Mac and Pi; it changes bandwidth use, not radio range.
+
 ## Temperature overlays and calibration pauses
 
 Press **t** on the main controls screen. **i** toggles a green highlight for pixels in the selected temperature range (initially 20–40 °C). **m** independently toggles red hottest and blue coldest spots and their readings in the visible image. Select the lower or upper bound with **1 / 2**, adjust with **+ / -** (one degree) or **[ / ]** (ten degrees). **u** switches °C / °F. **s** saves preferences and **b** returns. **g** independently toggles a vertical temperature scale. When enabled, the palette spans the coolest to hottest valid pixel in the current view, with labels in the selected unit. A uniform scene shows a single temperature. All overlays start off. Readings use the P1's temperature plane. Demo temperatures are synthetic.
