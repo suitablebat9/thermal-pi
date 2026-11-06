@@ -81,11 +81,18 @@ def main():
     parser.add_argument('--test', action='store_true', help='open real field viewer and log performance to CSV; q stops')
     parser.add_argument('--csv', help='test CSV filename (must not already exist)')
     parser.add_argument('--seconds', type=float, default=0, help='test duration; default runs until video window closes')
+    distance = parser.add_mutually_exclusive_group()
+    distance.add_argument('--distance-ft', type=float, help='fixed test distance from ground AP to Pi in feet')
+    distance.add_argument('--distance-m', type=float, help='fixed test distance from ground AP to Pi in meters')
     args = parser.parse_args()
+    distance_m = args.distance_m if args.distance_m is not None else (
+        args.distance_ft * 0.3048 if args.distance_ft is not None else None)
+    if distance_m is not None and (distance_m < 0 or not math.isfinite(distance_m)):
+        parser.error('Distance must be a finite nonnegative number.')
     if args.seconds < 0 or not math.isfinite(args.seconds):
         parser.error('--seconds must be a finite nonnegative number.')
-    if (args.csv or args.seconds) and not args.test:
-        parser.error('--csv and --seconds require --test.')
+    if (args.csv or args.seconds or distance_m is not None) and not args.test:
+        parser.error('--csv, --seconds and distance options require --test.')
     if args.test:
         args.field = True
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -167,7 +174,7 @@ def main():
                     filename = args.csv or str(pathlib.Path.home() / 'thermal-pi-logs' /
                         ('thermal-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.csv'))
                     try:
-                        log = LinkLog(filename, args.fps, args.quality, args.demo)
+                        log = LinkLog(filename, args.fps, args.quality, args.demo, distance_m=distance_m)
                     except OSError as exc:
                         parser.exit(1, f'Cannot create test log: {exc}\n')
                     print(f'Logging to {log.path.resolve()}\nPress q in the video window or Ctrl-C here to stop.', flush=True)
