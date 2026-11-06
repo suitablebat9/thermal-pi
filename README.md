@@ -168,6 +168,55 @@ In another terminal in the same folder:
 
 Open http://127.0.0.1:8080. No SSH tunnel is needed for a local Mac demo. Real camera mode is intended for Linux; Mac demo does not require libusb.
 
+## Test the actual video link and save CSV
+
+On the Mac, run:
+
+```sh
+thermal-pi --test
+```
+
+This uses your saved Pi connection, opens the video window automatically, and logs
+one row per video request to `~/thermal-pi-logs/thermal-<timestamp>.csv`.
+Press **q in the video window** or **Ctrl-C in the terminal** to stop. Each row is
+flushed immediately so an interrupted test preserves completed measurements.
+The test uses the same native frame endpoint, SSH tunnel, Mac enlargement, and
+ffplay pipeline as `thermal-pi --field`. Real-camera defaults remain 25 FPS and
+JPEG quality 85. Saved palette, zoom and temperature overlays are preserved.
+To change camera settings, use the regular menu and save them before testing.
+Demo mode is labelled in the CSV and cannot establish real camera performance.
+
+For a five-minute run with a chosen filename:
+
+```sh
+thermal-pi --test --seconds 300 --csv ~/Desktop/thermal-near.csv
+```
+
+Existing CSV files are never overwritten. An explicit destination also works,
+for example `thermal-pi suitablebat9@192.168.1.50 --test` (use your actual Pi IP).
+No Pi update is needed if its current field viewer already works.
+
+CSV columns include UTC time, elapsed seconds, frame sequence, bytes received,
+request duration, Mac decode/enlargement duration, local player-write duration,
+frame delivery gap, cumulative frames/bytes, average FPS and video payload kb/s.
+Rows marked `no_new_frame` mean the server had no newer frame; `error` rows
+record timeouts or HTTP failures. `end` contains the whole-run averages.
+`sequence_gap` counts camera frames not fetched between successful requests;
+it is **not packet loss**, since pacing and processing also skip source frames.
+Request time includes server processing and transfer, not just radio latency.
+Delivery means handed to the player, not confirmed displayed on screen.
+Bandwidth is JPEG plus frame metadata, excluding HTTP, SSH and Wi-Fi overhead.
+These measurements describe the actual viewing workload, not maximum link capacity
+or camera-to-screen latency. A timed run may finish slightly late while an
+in-progress request or player write completes.
+
+For comparable range tests, keep FPS, quality, palette and overlays the same.
+Start with a nearby baseline, then repeat at increasing distances with the
+camera looking at a similarly detailed, moving scene. Use descriptive filenames
+for location/distance. Connect the Mac by Ethernet to the BrosTrend and the Pi
+to its test SSID so the measurements use that link rather than your home Wi-Fi.
+Check for falling FPS, long frame gaps and errors relative to the baseline.
+
 ## Troubleshooting
 
 - `lsusb` should show `3474:45c2`. A different ID needs investigation; do not blindly change the rule.

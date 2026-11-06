@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Mac launcher: open the Pi's JPEG feed in an ffplay window through SSH."""
 import argparse
+import math
 import os
 import json
 import pathlib
@@ -77,7 +78,16 @@ def main():
     parser.add_argument('--field', action='store_true', help='native-resolution field link')
     parser.add_argument('--fps', type=int, help='field frame rate cap (default: 25 for P1, 4 for demo)')
     parser.add_argument('--quality', type=int, default=85, help='field JPEG quality (25–90, default 85)')
+    parser.add_argument('--test', action='store_true', help='open real field viewer and log performance to CSV; q stops')
+    parser.add_argument('--csv', help='test CSV filename (must not already exist)')
+    parser.add_argument('--seconds', type=float, default=0, help='test duration; default runs until video window closes')
     args = parser.parse_args()
+    if args.seconds < 0 or not math.isfinite(args.seconds):
+        parser.error('--seconds must be a finite nonnegative number.')
+    if (args.csv or args.seconds) and not args.test:
+        parser.error('--csv and --seconds require --test.')
+    if args.test:
+        args.field = True
     root = pathlib.Path(__file__).resolve().parents[1]
     if args.field:
         if (args.fps is not None and not 1 <= args.fps <= 25) or not 25 <= args.quality <= 90:
@@ -139,8 +149,9 @@ def main():
                     if args.field:
                         player = subprocess.Popen(options + ['-f', 'ppm_pipe', '-framerate', str(args.fps),
                                                   '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
-                        threading.Thread(target=feed, args=(player, local_port, args.fps, args.quality,
-                                         events.put if menu_first else print), daemon=True).start()
+                        if not args.test:
+                            threading.Thread(target=feed, args=(player, local_port, args.fps, args.quality,
+                                             events.put if menu_first else print), daemon=True).start()
                     elif args.demo:
                         player = subprocess.Popen(options + ['-f', 'mjpeg', '-framerate', '4',
                                                   '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
@@ -150,6 +161,23 @@ def main():
                                                   stdin=subprocess.DEVNULL, stderr=errors)
                     return 'Opening video window…'
                 root = pathlib.Path(__file__).resolve().parents[1]
+                if args.test:
+                    from thermal_pi.link_test import LinkLog
+                    from datetime import datetime
+                    filename = args.csv or str(pathlib.Path.home() / 'thermal-pi-logs' /
+                        ('thermal-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.csv'))
+                    try:
+                        log = LinkLog(filename, args.fps, args.quality, args.demo)
+                    except OSError as exc:
+                        parser.exit(1, f'Cannot create test log: {exc}\n')
+                    print(f'Logging to {log.path.resolve()}\nPress q in the video window or Ctrl-C here to stop.', flush=True)
+                    try:
+                        open_viewer()
+                        feed(player, local_port, args.fps, args.quality, print, log, args.seconds)
+                    finally:
+                        log.close()
+                        print(f'CSV saved: {log.path.resolve()}', flush=True)
+                    return
                 if menu_first:
                     sys.path.insert(0, str(root))
                     from thermal_pi.menu import run_menu

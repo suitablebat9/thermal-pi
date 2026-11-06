@@ -33,3 +33,15 @@ The Mac window path was exercised with the demo service and a real ffplay proces
 Mac emulator playback requests one JPEG at a time at up to four frames per second. A local ffplay integration check decoded successive frames, applied black hot during playback, and read live status afterward. Retesting this change over the authenticated QEMU SSH connection is pending.
 
 Field comparison: 30 synthetic noisy thermal frames, iron palette, scale, range and spots. Average legacy JPEG 39,445 bytes; field quality 60 including overlay metadata 2,906 bytes (92.6% less per frame). This is a local payload comparison, not a radio-throughput or range measurement.
+
+
+## CSV field link test
+
+The `thermal-pi --test` receiver uses the production field feed and writes
+flush-per-request CSV records. The automated recovery test covers successful
+frames, a duplicate response, a network exception, recovery, cumulative byte/frame
+counts, sequence gaps, finalization and refusing to overwrite a previous log.
+All 13 tests passed in the local QA environment. A local HTTP demo smoke test
+also passed through the real ffplay PPM decoder with a timed CSV recording.
+This validates the recording pipeline, not BrosTrend range or real-camera FPS.
+Actual radio and physical camera results must be measured in the field.
