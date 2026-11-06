@@ -192,6 +192,27 @@ For a five-minute run with a chosen filename:
 thermal-pi --test --seconds 300 --csv ~/Desktop/thermal-near.csv
 ```
 
+To label a stationary test with the distance from the ground AP to the Pi:
+
+```sh
+thermal-pi --test --distance-ft 300 --seconds 60
+```
+
+Use `--distance-m 100` instead for meters. Every row includes both numeric
+`distance_ft` and `distance_m` columns, converted automatically. Without a
+distance option, these cells are blank (unknown, not zero). This is a manually
+entered, fixed distance for the whole run; the script does not read DJI telemetry
+or track movement. Hold roughly the same distance during each run, stop, then
+start a new run with the next distance. Use a consistent measurement method,
+ideally straight-line separation between the AP and Pi.
+
+For a distance-versus-performance graph, collect the `status=end` row from each
+CSV and plot `distance_ft` (or `distance_m`) against `average_fps` or
+`average_payload_kbps`. These averages cover the entire run, including outages.
+Use frame rows' `frame_gap_ms` to investigate stalls. Keep test duration, camera
+settings and scene complexity comparable across runs. Repeated runs at each
+distance help show variation.
+
 Existing CSV files are never overwritten. An explicit destination also works,
 for example `thermal-pi suitablebat9@192.168.1.50 --test` (use your actual Pi IP).
 No Pi update is needed if its current field viewer already works.
