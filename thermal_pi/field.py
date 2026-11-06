@@ -15,33 +15,49 @@ def decode(packet):
         return enlarge_picture(native.convert('RGB'), json.loads(metadata))
 
 
-def feed(player, port, fps, quality, notify):
+def feed(player, port, fps, quality, notify, log=None, seconds=0):
     url = f'http://127.0.0.1:{port}/api/field-frame?quality={quality}'
     sequence = -1
     started = time.monotonic()
+    test_started = started
     frames = received = 0
     try:
         while player.poll() is None:
+            if seconds and time.monotonic()-test_started >= seconds:
+                break
             tick = time.monotonic()
             try:
                 with urlopen(f'{url}&after={sequence}', timeout=2) as response:
                     if response.status == 204:
-                        time.sleep(1/fps)
+                        if log:
+                            log.record('no_new_frame', request_ms=(time.monotonic()-tick)*1000)
+                        time.sleep(max(0, 1/fps-(time.monotonic()-tick)))
                         continue
                     packet = response.read()
                     sequence = int(response.headers['X-Frame-Sequence'])
+                fetched = time.monotonic()
                 picture = decode(packet)
+                decoded = time.monotonic()
+                live = True
                 received += len(packet)
                 frames += 1
-            except (URLError, TimeoutError) as exc:
+            except (URLError, TimeoutError, ValueError, OSError) as exc:
+                live = False
+                if log:
+                    log.record('error', request_ms=(time.monotonic()-tick)*1000, error=exc)
                 if isinstance(exc, HTTPError) and exc.code == 404:
                     notify('Update the Pi and restart its camera service for field mode.')
                     return
                 picture = Image.new('RGB', (640,480), '#17171a')
                 ImageDraw.Draw(picture).text((20,25), 'NO LIVE VIDEO - reconnecting', fill='white')
                 time.sleep(.3)
+            writing = time.monotonic()
             picture.save(player.stdin, format='PPM')
             player.stdin.flush()
+            if log and live:
+                log.record('frame', sequence=sequence, payload_bytes=len(packet),
+                           request_ms=(fetched-tick)*1000, decode_ms=(decoded-fetched)*1000,
+                           player_write_ms=(time.monotonic()-writing)*1000)
             elapsed = time.monotonic()-started
             if elapsed >= 5:
                 notify(f'Field: {frames/elapsed:.1f} fps | {8*received/elapsed/1000:.0f} kb/s video payload')
@@ -50,6 +66,8 @@ def feed(player, port, fps, quality, notify):
     except (BrokenPipeError, OSError):
         pass
     finally:
+        if log:
+            log.close()
         try:
             player.stdin.close()
         except OSError:
