@@ -192,26 +192,35 @@ For a five-minute run with a chosen filename:
 thermal-pi --test --seconds 300 --csv ~/Desktop/thermal-near.csv
 ```
 
-To label a stationary test with the distance from the ground AP to the Pi:
+To test multiple distances in **one CSV**, start with your initial distance:
 
 ```sh
-thermal-pi --test --distance-ft 300 --seconds 60
+thermal-pi --test --distance-ft 0
 ```
 
-Use `--distance-m 100` instead for meters. Every row includes both numeric
-`distance_ft` and `distance_m` columns, converted automatically. Without a
-distance option, these cells are blank (unknown, not zero). This is a manually
-entered, fixed distance for the whole run; the script does not read DJI telemetry
-or track movement. Hold roughly the same distance during each run, stop, then
-start a new run with the next distance. Use a consistent measurement method,
-ideally straight-line separation between the AP and Pi.
+Keep the test running as you move. In the Mac terminal, type `100` and Enter
+when you reach 100 feet, then `200` and Enter at 200 feet, and so on. Plain
+numbers mean feet; `100m` means meters and `300ft` explicitly means feet.
+Type `q` and Enter to finish, or use Ctrl-C / q in the video window.
+You can keep entering distances during a video outage. Errors continue to be
+logged until you stop. A lost SSH session may require restarting the test to
+restore video; automatic SSH reconnection is not implemented.
 
-For a distance-versus-performance graph, collect the `status=end` row from each
-CSV and plot `distance_ft` (or `distance_m`) against `average_fps` or
-`average_payload_kbps`. These averages cover the entire run, including outages.
-Use frame rows' `frame_gap_ms` to investigate stalls. Keep test duration, camera
-settings and scene complexity comparable across runs. Repeated runs at each
-distance help show variation.
+Every row includes both `distance_ft` and `distance_m`. The latest entered value
+labels subsequent events until you enter another. Distances are manual labels,
+not automatic DJI/GPS readings or interpolated positions. Without an initial
+distance these cells are blank until your first entry. Enter distances frequently
+when moving, or pause at each distance for a more comparable sample.
+
+Each change writes a `distance_end` summary for the previous interval, followed
+by a `distance_change` marker for the new one. `segment_id` identifies each
+interval, including repeated visits to the same distance. For graphs, select
+`distance_end` rows plus the final `end` row, and plot `distance_ft` against
+`segment_fps` or `segment_payload_kbps`. These interval averages include outages.
+The existing `average_fps` and `average_payload_kbps` remain whole-run averages.
+Frame rows' `frame_gap_ms` help investigate stalls. Keep settings and scene
+complexity comparable. A distance labels events at the time they are recorded,
+so a request already in flight when you update will use the new label.
 
 Existing CSV files are never overwritten. An explicit destination also works,
 for example `thermal-pi suitablebat9@192.168.1.50 --test` (use your actual Pi IP).
@@ -234,7 +243,7 @@ in-progress request or player write completes.
 For comparable range tests, keep FPS, quality, palette and overlays the same.
 Start with a nearby baseline, then repeat at increasing distances with the
 camera looking at a similarly detailed, moving scene. Use descriptive filenames
-for location/distance. Connect the Mac by Ethernet to the BrosTrend and the Pi
+for each route/test. Connect the Mac by Ethernet to the BrosTrend and the Pi
 to its test SSID so the measurements use that link rather than your home Wi-Fi.
 Check for falling FPS, long frame gaps and errors relative to the baseline.
 

@@ -15,7 +15,7 @@ def decode(packet):
         return enlarge_picture(native.convert('RGB'), json.loads(metadata))
 
 
-def feed(player, port, fps, quality, notify, log=None, seconds=0):
+def feed(player, port, fps, quality, notify, log=None, seconds=0, stop=None):
     url = f'http://127.0.0.1:{port}/api/field-frame?quality={quality}'
     sequence = -1
     started = time.monotonic()
@@ -23,6 +23,8 @@ def feed(player, port, fps, quality, notify, log=None, seconds=0):
     frames = received = 0
     try:
         while player.poll() is None:
+            if stop is not None and stop.is_set():
+                break
             if seconds and time.monotonic()-test_started >= seconds:
                 break
             tick = time.monotonic()
