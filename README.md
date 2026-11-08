@@ -177,12 +177,18 @@ thermal-pi --test
 ```
 
 This uses your saved Pi connection, opens the video window automatically, and logs
-one row per video request to `~/thermal-pi-logs/thermal-<timestamp>.csv`.
+one row per delivered frame or connection error to `~/thermal-pi-logs/thermal-<timestamp>.csv`.
 Press **q in the video window** or **Ctrl-C in the terminal** to stop. Each row is
 flushed immediately so an interrupted test preserves completed measurements.
-The test uses the same native frame endpoint, SSH tunnel, Mac enlargement, and
-ffplay pipeline as `thermal-pi --field`. Real-camera defaults remain 25 FPS and
-JPEG quality 85. Saved palette, zoom and temperature overlays are preserved.
+By default the test reads the same continuous MJPEG stream as normal
+`thermal-pi` viewing, passing JPEGs directly to ffplay without Python image
+decoding or a new HTTP request per frame. It requires no field-mode Python
+environment. The camera service controls the stream frame rate and JPEG quality
+(85); --fps and --quality only apply to field mode.
+Use `thermal-pi --test --field` to measure the reduced-bandwidth native-frame
+path instead. CSV `video_mode` distinguishes these workloads. Normal mode sends
+larger frames, so its bandwidth results must not be compared as if they were
+field-mode results. Saved palette, zoom and temperature overlays are preserved.
 To change camera settings, use the regular menu and save them before testing.
 Demo mode is labelled in the CSV and cannot establish real camera performance.
 
@@ -233,7 +239,11 @@ Rows marked `no_new_frame` mean the server had no newer frame; `error` rows
 record timeouts or HTTP failures. `end` contains the whole-run averages.
 `sequence_gap` counts camera frames not fetched between successful requests;
 it is **not packet loss**, since pacing and processing also skip source frames.
-Request time includes server processing and transfer, not just radio latency.
+In field mode, request time includes server processing and transfer. In normal
+mode it measures waiting for the next streamed frame and reading it. Neither is
+a pure radio latency measurement. Normal-mode sequence numbers are local received
+frame counters, so sequence_gap cannot identify skipped camera frames; decode_ms
+is zero because decoding happens inside ffplay and is not measured.
 Delivery means handed to the player, not confirmed displayed on screen.
 Bandwidth is JPEG plus frame metadata, excluding HTTP, SSH and Wi-Fi overhead.
 These measurements describe the actual viewing workload, not maximum link capacity

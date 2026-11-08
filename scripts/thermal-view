@@ -93,8 +93,6 @@ def main():
         parser.error('--seconds must be a finite nonnegative number.')
     if (args.csv or args.seconds or distance_m is not None) and not args.test:
         parser.error('--csv, --seconds and distance options require --test.')
-    if args.test:
-        args.field = True
     root = pathlib.Path(__file__).resolve().parents[1]
     if args.field:
         if (args.fps is not None and not 1 <= args.fps <= 25) or not 25 <= args.quality <= 90:
@@ -106,6 +104,9 @@ def main():
             os.execv(str(python), [str(python), *sys.argv])
         sys.path.insert(0, str(root))
         from thermal_pi.field import feed
+    if args.test and not args.field:
+        sys.path.insert(0, str(root))
+        from thermal_pi.stream_test import feed
     menu_first = args.host is None or pathlib.Path(sys.argv[0]).name == 'thermal-pi'
     if args.host is None:
         host, port, demo = connection(parser, args.setup)
@@ -159,6 +160,9 @@ def main():
                         if not args.test:
                             threading.Thread(target=feed, args=(player, local_port, args.fps, args.quality,
                                              events.put if menu_first else print), daemon=True).start()
+                    elif args.test:
+                        player = subprocess.Popen(options + ['-f', 'mjpeg', '-use_wallclock_as_timestamps', '1',
+                                                  '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
                     elif args.demo:
                         player = subprocess.Popen(options + ['-f', 'mjpeg', '-framerate', '4',
                                                   '-i', 'pipe:0'], stdin=subprocess.PIPE, stderr=errors)
@@ -174,7 +178,7 @@ def main():
                     filename = args.csv or str(pathlib.Path.home() / 'thermal-pi-logs' /
                         ('thermal-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.csv'))
                     try:
-                        log = LinkLog(filename, args.fps, args.quality, args.demo, distance_m=distance_m)
+                        log = LinkLog(filename, args.fps, args.quality, args.demo, distance_m=distance_m, mode='field' if args.field else 'normal')
                     except OSError as exc:
                         parser.exit(1, f'Cannot create test log: {exc}\n')
                     print(f'Logging to {log.path.resolve()}\nPress q in the video window or Ctrl-C here to stop.', flush=True)

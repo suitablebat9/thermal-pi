@@ -14,9 +14,10 @@ class LinkLog:
                'frame_gap_ms', 'frames_total', 'payload_bytes_total',
                'average_fps', 'average_payload_kbps', 'target_fps',
                'jpeg_quality', 'demo', 'error', 'distance_ft', 'distance_m', 'segment_id',
-               'segment_elapsed_s', 'segment_fps', 'segment_payload_kbps']
+               'segment_elapsed_s', 'segment_fps', 'segment_payload_kbps', 'video_mode']
 
-    def __init__(self, path, fps, quality, demo=False, distance_m=None):
+    def __init__(self, path, fps, quality, demo=False, distance_m=None, mode='field'):
+        self.mode = mode
         self.lock = threading.RLock()
         self.path = Path(path).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,7 +56,7 @@ class LinkLog:
             self.segment_frames += 1
             self.segment_bytes += payload_bytes
         self.writer.writerow(dict(
-            utc=datetime.now(timezone.utc).isoformat(), elapsed_s=round(elapsed, 6),
+            video_mode=self.mode, utc=datetime.now(timezone.utc).isoformat(), elapsed_s=round(elapsed, 6),
             status=status, sequence=sequence, sequence_gap=skipped,
             payload_bytes=payload_bytes, request_ms=round(request_ms, 3),
             decode_ms=round(decode_ms, 3), player_write_ms=round(player_write_ms, 3),
